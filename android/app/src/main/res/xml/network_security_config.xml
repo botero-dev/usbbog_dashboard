@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  A self-hosted Immich listens on plain HTTP (default port 2283), which Android
+  blocks from API 28 onwards. Cleartext is permitted here so the app can reach a
+  LAN instance the user configures. Tighten this file (domain-config entries)
+  once the server is served over TLS.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

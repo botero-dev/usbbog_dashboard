@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:usbbog_dashboard/app.dart';
+import 'package:usbbog_dashboard/modules/photos/services/immich_provider.dart';
+import 'package:usbbog_dashboard/modules/photos/services/immich_service.dart';
+import 'package:usbbog_dashboard/modules/photos/views/gallery_card.dart';
 import 'package:usbbog_dashboard/modules/pokemon/services/pokemon_provider.dart';
 import 'package:usbbog_dashboard/modules/pokemon/services/pokemon_service.dart';
 
+import 'support/fake_immich.dart';
 import 'support/fake_pokeapi.dart';
 
 void main() {
@@ -22,8 +26,27 @@ void main() {
     );
   }
 
-  setUp(() => useApi());
-  tearDown(PokemonProvider.reset);
+  /// Same idea for Immich: the demo host is never contacted in tests. Every
+  /// account — demo or added in the flow — gets a fake-backed service.
+  void useImmich({int status = 200}) {
+    ImmichProvider.builder = (baseUrl, apiKey) => ImmichService(
+      baseUrl: baseUrl,
+      apiKey: apiKey,
+      client: fakeImmich(status: status),
+      now: () => DateTime(2026, 11, 16, 9, 32),
+    );
+  }
+
+  setUp(() {
+    useApi();
+    ImmichProvider.reset();
+    useImmich();
+  });
+
+  tearDown(() {
+    PokemonProvider.reset();
+    ImmichProvider.reset();
+  });
 
   Future<void> pumpApp(WidgetTester tester) async {
     useTallSurface(tester);
@@ -109,7 +132,45 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets('add gallery: widget type -> account -> list -> new card', (
+  testWidgets('add gallery: widget type -> account -> albums -> new card', (
+    tester,
+  ) async {
+    await pumpApp(tester);
+    await settle(tester);
+
+    expect(find.byType(GalleryCard), findsOneWidget);
+
+    await tester.tap(find.text('+'));
+    await settle(tester);
+
+    await tester.tap(find.text('Galería Immich'));
+    await settle(tester);
+
+    // The demo account is offered first, next to "Add Account".
+    expect(find.text('Select Account'), findsOneWidget);
+    expect(find.text('Demo · demo.immich.app'), findsOneWidget);
+    expect(find.text('Add Account'), findsOneWidget);
+
+    await tester.tap(find.text('Demo · demo.immich.app'));
+    await settle(tester);
+
+    expect(find.text('Select List'), findsOneWidget);
+    expect(find.text('Holiday'), findsOneWidget);
+    expect(find.text('Birthday'), findsOneWidget);
+    // Empty albums are hidden, so there is nothing to tap that would yield a
+    // blank card.
+    expect(find.text('Empty Album'), findsNothing);
+
+    await tester.tap(find.text('Holiday'));
+    await settle(tester);
+
+    expect(find.text('Hola, Andrés'), findsOneWidget);
+    expect(find.byType(GalleryCard), findsNWidgets(2));
+
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('add gallery: a new server account is validated and reused', (
     tester,
   ) async {
     await pumpApp(tester);
@@ -117,20 +178,49 @@ void main() {
 
     await tester.tap(find.text('+'));
     await settle(tester);
-
     await tester.tap(find.text('Galería Immich'));
     await settle(tester);
-    expect(find.text('Select Account'), findsOneWidget);
 
-    await tester.tap(find.text('boterock@gmail.com'));
+    await tester.tap(find.text('Add Account'));
     await settle(tester);
+
+    expect(find.text('API Key'), findsOneWidget);
+
+    // Empty fields are rejected before any request.
+    await tester.tap(find.text('Connect'));
+    await settle(tester);
+    expect(find.textContaining('Completa servidor'), findsOneWidget);
+
+    final fields = find.byType(TextField);
+    await tester.enterText(fields.at(0), 'photos.example.com');
+    await tester.enterText(fields.at(1), 'secret-key');
+
+    await tester.tap(find.text('Connect'));
+    await settle(tester);
+    await tester.pump(const Duration(milliseconds: 200));
+    await settle(tester);
+
+    // Connect goes straight to the album list, and the account is now stored.
     expect(find.text('Select List'), findsOneWidget);
+    expect(
+      ImmichProvider.accounts.map((a) => a.label),
+      contains('photos.example.com'),
+    );
 
-    await tester.tap(find.text('Paseo a la finca'));
+    await tester.tap(find.text('Holiday'));
     await settle(tester);
 
-    expect(find.text('Hola, Andrés'), findsOneWidget);
-    expect(find.textContaining('Paseo a la finca'), findsOneWidget);
+    expect(find.byType(GalleryCard), findsNWidgets(2));
+
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('the gallery card reports an Immich failure', (tester) async {
+    useImmich(status: 401);
+    await pumpApp(tester);
+    await settle(tester);
+
+    expect(find.textContaining('clave de API'), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox());
   });

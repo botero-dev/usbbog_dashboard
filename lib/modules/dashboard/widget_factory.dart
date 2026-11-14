@@ -21,9 +21,10 @@ class WidgetFactory {
     return switch (item.config) {
       ClockConfig() => ClockCard(key: key, onLongPress: onLongPress),
       PokemonConfig() => PokemonCard(key: key, onLongPress: onLongPress),
-      GalleryConfig(:final label) => GalleryCard(
+      GalleryConfig(:final accountId, :final albumId) => GalleryCard(
         key: key,
-        label: label,
+        accountId: accountId,
+        albumId: albumId,
         onLongPress: onLongPress,
       ),
       TasksConfig() => TasksCard(key: key, onLongPress: onLongPress),

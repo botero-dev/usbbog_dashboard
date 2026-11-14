@@ -18,9 +18,9 @@ class DashboardViewModel extends ChangeNotifier {
           id: 'gallery',
           order: 2,
           config: GalleryConfig(
-            accountId: 'demo',
-            albumId: 'mis-fotos',
-            label: 'Mis Fotos',
+            accountId: 'immich-demo',
+            albumId: '',
+            label: 'Galería',
           ),
         ),
         DashboardItem(

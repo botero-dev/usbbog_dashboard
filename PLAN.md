@@ -29,7 +29,7 @@ Screens are 412×917 with 20 px page padding.
 | Settings screen | Gear stays in the header but is a no-op. No content was designed. |
 | "Reloj del sistema" `1:51`, "Calendario del sistema" `1:52` | Not screens. Tapping the clock/mini-calendar opens the **OS** apps via `url_launcher`. |
 | Widget reorder / delete | Not designed. Stretch goal: long-press → delete. |
-| Multiple photo backends, OAuth | Immich email + password only. |
+| OAuth, photo upload, editing | Read-only API-key access. |
 | Localization, tablet/desktop layouts, image caching | Deferred. |
 
 ### Backends
@@ -38,11 +38,44 @@ Screens are 412×917 with 20 px page padding.
 |---|---|---|---|
 | Fecha/Hora | device clock + `url_launcher` | — | decided |
 | Pokemon del dia | PokeAPI (`https://pokeapi.co/api/v2`) | none | decided |
-| Galeria Immich | Immich REST | email + password | **deferred to M5** |
+| Galeria Immich | Immich REST | **API key** (`x-api-key`) | done — HTTP or HTTPS, any port |
 | Lista de Tareas | **CalDAV** (VTODO) | username + password | decided |
 
 Accounts are backend-agnostic — the design's `Server / User / Pass` form serves CalDAV and Immich
 alike; an `AccountKind` field says which.
+
+**Immich accounts:** `ImmichProvider` holds a list of accounts plus one `ImmichService` per
+account. It starts with Immich's public demo instance (`https://demo.immich.app`) and its
+read-only demo API key, so the gallery card has content with no setup. The add flow offers that
+account or lets you enter another server + API key, validated against the server before it is
+saved. Demo host/key are `String.fromEnvironment`, overridable without editing code:
+
+```
+flutter run --dart-define=IMMICH_BASE_URL=https://immich.example.com \
+            --dart-define=IMMICH_API_KEY=<key>
+```
+
+The demo key only grants read access to the public demo library — never commit a real key.
+
+**Server URL rules** (`ImmichService.normalizeBaseUrl`), so a LAN instance on Immich's default
+port works without typing a scheme:
+
+| Input | Resolved |
+|---|---|
+| `192.168.1.10:2283`, `localhost:2283`, `immich.lan:2283` | `http://…` — an explicit non-443 port means a self-hosted instance |
+| `10.x`, `172.16–31.x`, `192.168.x`, `169.254.x`, `*.local`, loopback | `http://…` |
+| `demo.immich.app`, `example.com:443` | `https://…` |
+| `http://…` / `https://…` | honoured as typed |
+
+A path prefix is preserved, so a reverse proxy at `https://host/immich` also works.
+
+**Platform config required for plain HTTP** (all now in place):
+
+| Platform | Change |
+|---|---|
+| Android | `INTERNET` permission in the **main** manifest (Flutter only puts it in debug/profile, so release builds had no network) and `res/xml/network_security_config.xml` permitting cleartext for LAN instances |
+| iOS | `NSAppTransportSecurity → NSAllowsLocalNetworking` (local network only, not arbitrary loads) |
+| macOS | same ATS key, **plus** `com.apple.security.network.client` in both entitlements files — without it the sandbox blocks every request |
 
 ---
 
@@ -124,13 +157,20 @@ lib/
     │       ├── pokedex_view.dart              # 1:49
     │       └── widgets/pokemon_artwork.dart   # artwork + placeholder
     ├── photos/
-    │   ├── models/album.dart
-    │   ├── models/photo.dart
-    │   ├── services/immich_service.dart       # login, albums, photo URLs
+    │   ├── models/album.dart                  # id, name, assetCount, thumbnailAssetId
+    │   ├── models/immich_account.dart         # id, label, baseUrl, apiKey, isDemo
+    │   ├── models/photo.dart                  # id + thumbnail/preview urls
+    │   ├── services/immich_service.dart       # x-api-key, albums, search, dailyPhoto
+    │   ├── services/immich_provider.dart      # account list + one service per account
     │   ├── view_models/gallery_view_model.dart
+    │   ├── view_models/album_picker_view_model.dart
+    │   ├── view_models/add_immich_account_view_model.dart
     │   └── views/
     │       ├── gallery_card.dart              # dashboard tile (1:31)
-    │       └── photo_view.dart                # fullscreen photo
+    │       ├── photo_view.dart                # fullscreen photo
+    │       ├── immich_account_picker_view.dart # 9:60 for Immich
+    │       ├── add_immich_account_view.dart   # 9:85 for Immich (Server + API key)
+    │       └── album_picker_view.dart         # 9:102 for Immich
     ├── tasks/
     │   ├── models/task.dart                   # id, summary, isDone, due
     │   ├── models/task_list.dart              # uid + displayName (a VTODO calendar)
@@ -153,13 +193,16 @@ lib/
 The "Select List" step is a generic picker in `shared/views/` because both photos (albums) and
 tasks (VTODO calendars) need one.
 
-**Status:** M0 ✅ · M1 ✅ except OS deep links (`url_launcher`) · **M3 ✅** · M2 persistence,
-M4 (CalDAV), M5 (Immich) pending. Built: theme, `formatters`/`month_grid`/`system_apps`,
+**Status:** M0 ✅ · M1 ✅ except OS deep links (`url_launcher`) · **M3 ✅** · **M5 ✅**
+(gallery, Immich) · M2 persistence and M4 (CalDAV) pending. Built: theme, `formatters`/`month_grid`/`system_apps`,
 `PokemonService` (own HTTP + timeouts) + `PokemonProvider`, the shared widgets (`surface_card`, `primary_button`,
 `wireframe_scaffold`, `async_view`, `option_picker_view`), all six screens, the full navigation map,
 and the real Pokémon card + Pokedex reading PokeAPI (Spanish types and flavour text, official
-artwork, day-of-year pick, in-memory cache, error + retry). Still demo data: gallery, tasks,
-accounts (`SelectAccountViewModel.demo`, a 600 ms fake `connect()`).
+artwork, day-of-year pick, in-memory cache, error + retry) and the gallery card + fullscreen viewer
+reading Immich (account picker, add-account with validation, albums, `POST /search/metadata`,
+photo of the day, fullscreen viewer). Still demo data: tasks and the CalDAV account screens
+(`SelectAccountViewModel.demo`, a 600 ms fake `connect()`). Immich accounts live in memory only —
+they survive navigation but not an app restart until M2 persistence lands.
 
 ---
 
@@ -296,7 +339,7 @@ It has low adoption (≈800 downloads), so pin it; if it misbehaves the fallback
 | **M2** | Persistence + add/remove: `dashboard.v1`, `Add widget` picker (the two account-free types enabled, the other two marked "próximamente"), long-press to delete | Layout survives app restart |
 | **M3** | Pokémon: `pokemon_service.dart` (PokeAPI), card, Pokedex view | Card and detail show real Haunter data |
 | **M4** | Accounts + Tasks: `account_service.dart` (secure storage), `add_account_view` (validates with `CalDavClient.connect`), `select_account_view`, task-list picker, `tasks_card` with `getTodos` / `updateTodo` | A real CalDAV task appears and checking it survives a refresh |
-| **M5** | Photos (Immich, *deferred*): `immich_service.dart`, album picker, `gallery_card`, `photo_view` | A real album photo renders on the dashboard |
+| **M5** | ✅ Photos (Immich): `immich_service.dart`, `album_picker_view`, `gallery_card`, `photo_view` | A real album photo renders on the dashboard — verified against `demo.immich.app` |
 | **M6** | Polish: empty state, loading/error+retry on every card, spacing/typography pass, unit tests, README update | All 6 screens reachable; no red screens on airplane mode |
 
 Each milestone is independently demoable and leaves the app runnable.
@@ -347,9 +390,9 @@ nothing above blocks that.
 1. **Tasks come from CalDAV** with username + password, via the `caldav` package. A "list" is a
    VTODO-capable calendar (`TaskList { uid, displayName }`); ticking a row calls
    `updateTodo(todo.copyWith(status: completed))`, so completion is stored on the server.
-2. **Immich auth is deferred to M5** — not decided yet. `Add account` lands in M4 against
-   CalDAV only, which de-risks the form; Immich then reuses the same screen with
-   `AccountKind.immich`.
+2. **Immich auth is an API key**, not a login: `ImmichProvider` uses the public demo host and a
+   read-only demo key (overridable with `--dart-define`). The gallery widget therefore skips the
+   account screen and goes straight to the album picker.
 3. **Pokémon of the day:** `dayOfYear % dexCount` — deterministic, no backend.
 4. **Pokémon image:** `sprites.other['official-artwork'].front_default`, falling back to
    `sprites.front_default` (the design's 131×131 placeholder).
@@ -366,7 +409,7 @@ nothing above blocks that.
    `supported-calendar-component-set`; if the package does not expose it, list every calendar and
    drop the ones whose `getTodos()` fails.
 2. **HTTP demo server.** `caldav` refuses plain `http://` unless constructed with
-   `allowInsecure: true`. Decide at M5 whether the demo runs against a local Radicale/Baïkal
+   `allowInsecure: true`. Decide at M4 whether the demo runs against a local Radicale/Baïkal
    (flag on, development only) or a real HTTPS host.
 3. **Due dates and priority.** `CalendarTodo` exposes both, but the design's rows are only a
    checkbox + title. v1 ignores them; adding a due-date line is a one-widget change if wanted.

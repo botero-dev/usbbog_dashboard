@@ -7,6 +7,9 @@ import '../../../shared/widgets/wireframe_scaffold.dart';
 import '../../accounts/models/account.dart';
 import '../../accounts/views/select_account_view.dart';
 import '../../photos/models/album.dart';
+import '../../photos/models/immich_account.dart';
+import '../../photos/views/album_picker_view.dart';
+import '../../photos/views/immich_account_picker_view.dart';
 import '../../tasks/models/task_list.dart';
 import '../models/widget_config.dart';
 
@@ -14,11 +17,7 @@ import '../models/widget_config.dart';
 class AddWidgetView extends StatelessWidget {
   const AddWidgetView({super.key});
 
-  // Replaced by `immich_service` / `caldav_service` in M5 and M4.
-  static const _demoAlbums = [
-    Album(id: 'mis-fotos', name: 'Mis Fotos'),
-    Album(id: 'paseo-a-la-finca', name: 'Paseo a la finca'),
-  ];
+  // Replaced by `caldav_service` in M4.
   static const _demoTaskLists = [
     TaskList(id: 'mis-tareas', displayName: 'Mis Tareas'),
   ];
@@ -56,26 +55,19 @@ class AddWidgetView extends StatelessWidget {
     );
   }
 
+  /// Immich ships with the demo host and key in [ImmichProvider], so the album
+  /// list is the only step — no account screen.
+  /// Account (demo or newly added) -> album.
   Future<void> _addGallery(BuildContext context) async {
-    final account = await Navigator.of(context).push<Account>(
-      MaterialPageRoute(
-        builder: (_) => const SelectAccountView(kind: AccountKind.immich),
-      ),
+    final account = await Navigator.of(context).push<ImmichAccount>(
+      MaterialPageRoute(builder: (_) => const ImmichAccountPickerView()),
     );
     if (account == null || !context.mounted) {
       return;
     }
 
-    final album = await Navigator.of(context).push<PickerOption>(
-      MaterialPageRoute(
-        builder: (_) => OptionPickerView(
-          title: 'Select List',
-          options: [
-            for (final album in _demoAlbums)
-              PickerOption(id: album.id, label: album.name),
-          ],
-        ),
-      ),
+    final album = await Navigator.of(context).push<Album>(
+      MaterialPageRoute(builder: (_) => AlbumPickerView(account: account)),
     );
     if (album == null || !context.mounted) {
       return;
@@ -85,7 +77,7 @@ class AddWidgetView extends StatelessWidget {
       GalleryConfig(
         accountId: account.id,
         albumId: album.id,
-        label: album.label,
+        label: album.name,
       ),
     );
   }

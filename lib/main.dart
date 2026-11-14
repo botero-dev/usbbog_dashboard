@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:usbbog_dashboard/app.dart';
 
 void main() {
-  runApp(const MyApp());
+  runApp(const UsbbogDashboardApp());
 }
 
 class MyApp extends StatelessWidget {

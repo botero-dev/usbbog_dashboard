@@ -85,9 +85,10 @@ lib/
 │       └── system_apps.dart       # url_launcher: open OS clock / calendar
 ├── shared/
 │   ├── widgets/
-│   │   ├── surface_card.dart      # 24 px radius + 2 px white border card
-│   │   ├── primary_button.dart    # the "Boton" component (332×87)
-│   │   └── async_view.dart        # loading / error+retry / content switch
+│   │   ├── surface_card.dart       # 24 px radius + 2 px white border card
+│   │   ├── primary_button.dart     # the "Boton" component (332×87)
+│   │   ├── wireframe_scaffold.dart # blue header + circular back (1:50, 9:60, 9:85, 9:102)
+│   │   └── async_view.dart         # loading / error+retry — arrives with M3
 │   └── views/
 │       └── option_picker_view.dart # generic "Select List": title + options → pops one
 └── modules/
@@ -148,6 +149,13 @@ lib/
 The "Select List" step is a generic picker in `shared/views/` because both photos (albums) and
 tasks (VTODO calendars) need one.
 
+**Skeleton status (done):** theme, `formatters`/`month_grid`/`system_apps`, the shared widgets,
+all six screens, and the full navigation map. Cards still render demo data and each screen's
+`ChangeNotifier` is only present where it already does work (`DashboardViewModel`,
+`ClockViewModel`, `SelectAccountViewModel`, `AddAccountViewModel`). The services
+(`pokemon_service`, `immich_service`, `caldav_service`), `async_view`, `photo_view` and the
+per-card view models land with their milestones (M3–M5).
+
 ---
 
 ## 4. Data model and persistence
@@ -182,8 +190,9 @@ which subclass to build:
 `accounts.v1` holding the non-secret account list `(id, kind, label, server, user)`. `kind`
 (`immich` | `caldav`) selects which service validates the credentials when "Connect" is tapped.
 
-**Card order on screen:** `[greeting] [clock] [date] [pokemon] [gallery] [tasks] [+]` — the clock
-and date are fixed chrome, the rest come from `dashboard.v1`.
+**Card order:** every card is an item, seeded in the design's order — `[clock] [pokemon] [gallery]
+[tasks]` — under a fixed greeting header, with the "+" tile always last. M2 persists the whole
+list to `dashboard.v1`.
 
 ---
 

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/wireframe_scaffold.dart';
 import '../models/pokemon.dart';
+import 'widgets/pokemon_artwork.dart';
 
 /// `1:49` — Pokémon detail.
 class PokedexView extends StatelessWidget {
@@ -13,12 +14,18 @@ class PokedexView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return WireframeScaffold(
-      title: pokemon.name,
+      title: pokemon.displayName,
       backgroundColor: AppColors.pokedex,
       child: ListView(
         padding: const EdgeInsets.fromLTRB(27, 25, 27, 25),
         children: [
-          Container(height: 262, color: AppColors.imagePlaceholder),
+          Center(
+            child: PokemonArtwork(
+              imageUrl: pokemon.imageUrl,
+              size: 262,
+              radius: 0,
+            ),
+          ),
           const SizedBox(height: 32),
           Wrap(
             spacing: 12,
@@ -33,21 +40,47 @@ class PokedexView extends StatelessWidget {
               Expanded(
                 child: _StatBox(
                   label: 'Tamaño',
-                  value: '${pokemon.heightCm} cm',
+                  value: formatHeight(pokemon.heightCm),
                 ),
               ),
               const SizedBox(width: 24),
               Expanded(
-                child: _StatBox(label: 'Peso', value: '${pokemon.weightG} g'),
+                child: _StatBox(
+                  label: 'Peso',
+                  value: formatWeight(pokemon.weightG),
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 32),
-          Text(pokemon.description, style: AppText.body.copyWith(fontSize: 24)),
+          if (pokemon.description.isNotEmpty) ...[
+            const SizedBox(height: 32),
+            Text(
+              pokemon.description,
+              style: AppText.body.copyWith(fontSize: 24),
+            ),
+          ],
         ],
       ),
     );
   }
+}
+
+/// `123 cm` under a metre, `1,6 m` above it.
+String formatHeight(int heightCm) {
+  if (heightCm < 100) {
+    return '$heightCm cm';
+  }
+  final metres = (heightCm / 100).toStringAsFixed(1).replaceAll('.', ',');
+  return '$metres m';
+}
+
+/// `185 g` under a kilo, `5,4 kg` above it.
+String formatWeight(int weightG) {
+  if (weightG < 1000) {
+    return '$weightG g';
+  }
+  final kilos = (weightG / 1000).toStringAsFixed(1).replaceAll('.', ',');
+  return '$kilos kg';
 }
 
 class _TypeChip extends StatelessWidget {

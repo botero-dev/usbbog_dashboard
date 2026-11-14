@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:usbbog_dashboard/app.dart';
+import 'package:usbbog_dashboard/modules/pokemon/services/pokemon_provider.dart';
+import 'package:usbbog_dashboard/modules/pokemon/services/pokemon_service.dart';
+
+import 'support/fake_pokeapi.dart';
 
 void main() {
   // A tall surface so the whole card stack is laid out and tappable.
@@ -10,6 +14,23 @@ void main() {
     addTearDown(tester.view.reset);
   }
 
+  /// No network: the provider hands out a fake-backed service.
+  void useApi({bool failing = false}) {
+    PokemonProvider.service = PokemonService(
+      client: failing ? failingPokeApi() : fakePokeApi(),
+      now: () => DateTime(2026, 11, 16, 9, 32),
+    );
+  }
+
+  setUp(() => useApi());
+  tearDown(PokemonProvider.reset);
+
+  Future<void> pumpApp(WidgetTester tester) async {
+    useTallSurface(tester);
+    await tester.pumpWidget(const UsbbogDashboardApp());
+  }
+
+  /// Route transitions plus the Pokémon request completing.
   Future<void> settle(WidgetTester tester) async {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
@@ -19,8 +40,8 @@ void main() {
   testWidgets('dashboard renders the greeting and the seeded cards', (
     tester,
   ) async {
-    useTallSurface(tester);
-    await tester.pumpWidget(const UsbbogDashboardApp());
+    await pumpApp(tester);
+    await settle(tester);
 
     expect(find.text('Hola, Andrés'), findsOneWidget);
     expect(find.text('Tus tareas:'), findsOneWidget);
@@ -30,9 +51,54 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
+  testWidgets('the Pokémon card shows real PokeAPI data', (tester) async {
+    await pumpApp(tester);
+    await settle(tester);
+
+    expect(find.text('Pokemon del día'), findsOneWidget);
+    expect(find.text('Haunter'), findsOneWidget);
+    expect(find.textContaining('observando'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('the Pokémon card shows an error with a retry', (tester) async {
+    useApi(failing: true);
+    await pumpApp(tester);
+    await settle(tester);
+
+    expect(find.textContaining('servidor'), findsOneWidget);
+    expect(find.text('Reintentar'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('the Pokemon card opens the Pokedex with types and stats', (
+    tester,
+  ) async {
+    await pumpApp(tester);
+    await settle(tester);
+
+    await tester.tap(find.text('Haunter'));
+    await settle(tester);
+
+    expect(find.text('Fantasma'), findsOneWidget);
+    expect(find.text('Veneno'), findsOneWidget);
+    expect(find.text('Tamaño'), findsOneWidget);
+    expect(find.text('1,6 m'), findsOneWidget);
+    expect(find.text('100 g'), findsOneWidget);
+
+    // Back returns to the dashboard.
+    await tester.tap(find.byIcon(Icons.arrow_back));
+    await settle(tester);
+    expect(find.text('Hola, Andrés'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('the + tile opens Add widget', (tester) async {
-    useTallSurface(tester);
-    await tester.pumpWidget(const UsbbogDashboardApp());
+    await pumpApp(tester);
+    await settle(tester);
 
     await tester.tap(find.text('+'));
     await settle(tester);
@@ -43,29 +109,11 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets('the Pokemon card opens the Pokedex', (tester) async {
-    useTallSurface(tester);
-    await tester.pumpWidget(const UsbbogDashboardApp());
-
-    await tester.tap(find.text('Haunter'));
-    await settle(tester);
-
-    expect(find.text('Fantasma'), findsOneWidget);
-    expect(find.text('123 cm'), findsOneWidget);
-
-    // Back returns to the dashboard.
-    await tester.tap(find.byIcon(Icons.arrow_back));
-    await settle(tester);
-    expect(find.text('Hola, Andrés'), findsOneWidget);
-
-    await tester.pumpWidget(const SizedBox());
-  });
-
   testWidgets('add gallery: widget type -> account -> list -> new card', (
     tester,
   ) async {
-    useTallSurface(tester);
-    await tester.pumpWidget(const UsbbogDashboardApp());
+    await pumpApp(tester);
+    await settle(tester);
 
     await tester.tap(find.text('+'));
     await settle(tester);
@@ -88,8 +136,8 @@ void main() {
   });
 
   testWidgets('add tasks: Connect skips back to Select List', (tester) async {
-    useTallSurface(tester);
-    await tester.pumpWidget(const UsbbogDashboardApp());
+    await pumpApp(tester);
+    await settle(tester);
 
     await tester.tap(find.text('+'));
     await settle(tester);

@@ -63,8 +63,11 @@ views/ ──► view_models/ ──► services/ ──► outside world (HTTP,
 
 - **State management:** `ChangeNotifier` + `ListenableBuilder` (both built into Flutter). No state-management package.
 - **Navigation:** `Navigator.push` with typed results — the add-widget flow returns a `WidgetConfig` via `Navigator.pop(config)`. No router package, no global state.
-- **Dependency wiring:** plain constructor injection in `app.dart`. No DI container.
-- **Errors:** services throw `ApiException` / `StorageException`; view models `try/catch` and expose an error message to the view. No `Result<T>` type.
+- **Dependency wiring:** each module exposes a static provider (`PokemonProvider.service`) that the
+  app reads directly and tests overwrite. No `AppServices` container, no globals beyond the provider.
+- **Errors:** each service owns its HTTP calls and its timeout, and throws a module-owned
+  exception with a Spanish message (`PokemonException`); view models `try/catch` and expose that
+  message to the view. No shared `ApiClient`, no `Result<T>` type.
 
 ---
 
@@ -76,7 +79,6 @@ lib/
 ├── app.dart                       # MaterialApp, theme, builds DashboardView + its view model
 ├── core/
 │   ├── theme/app_theme.dart       # colors, text styles, card decoration
-│   ├── network/api_client.dart    # http wrapper: GET/POST, headers, timeouts, throws ApiException
 │   ├── storage/prefs.dart         # SharedPreferences helper (typed get/set JSON)
 │   ├── storage/secure_store.dart  # flutter_secure_storage wrapper for passwords
 │   └── utils/
@@ -113,12 +115,14 @@ lib/
     │           ├── mini_month_calendar.dart
     │           └── day_cell.dart
     ├── pokemon/
-    │   ├── models/pokemon.dart
-    │   ├── services/pokemon_service.dart      # PokeAPI
+    │   ├── models/pokemon.dart                # entity + PokeAPI parsing + pokemonIdForDate
+    │   ├── services/pokemon_provider.dart     # static accessor for the shared service
+    │   ├── services/pokemon_service.dart      # PokeAPI, day-of-year pick, in-memory cache
     │   ├── view_models/pokemon_view_model.dart
     │   └── views/
     │       ├── pokemon_card.dart              # dashboard tile
-    │       └── pokedex_view.dart              # 1:49
+    │       ├── pokedex_view.dart              # 1:49
+    │       └── widgets/pokemon_artwork.dart   # artwork + placeholder
     ├── photos/
     │   ├── models/album.dart
     │   ├── models/photo.dart
@@ -149,12 +153,13 @@ lib/
 The "Select List" step is a generic picker in `shared/views/` because both photos (albums) and
 tasks (VTODO calendars) need one.
 
-**Skeleton status (done):** theme, `formatters`/`month_grid`/`system_apps`, the shared widgets,
-all six screens, and the full navigation map. Cards still render demo data and each screen's
-`ChangeNotifier` is only present where it already does work (`DashboardViewModel`,
-`ClockViewModel`, `SelectAccountViewModel`, `AddAccountViewModel`). The services
-(`pokemon_service`, `immich_service`, `caldav_service`), `async_view`, `photo_view` and the
-per-card view models land with their milestones (M3–M5).
+**Status:** M0 ✅ · M1 ✅ except OS deep links (`url_launcher`) · **M3 ✅** · M2 persistence,
+M4 (CalDAV), M5 (Immich) pending. Built: theme, `formatters`/`month_grid`/`system_apps`,
+`PokemonService` (own HTTP + timeouts) + `PokemonProvider`, the shared widgets (`surface_card`, `primary_button`,
+`wireframe_scaffold`, `async_view`, `option_picker_view`), all six screens, the full navigation map,
+and the real Pokémon card + Pokedex reading PokeAPI (Spanish types and flavour text, official
+artwork, day-of-year pick, in-memory cache, error + retry). Still demo data: gallery, tasks,
+accounts (`SelectAccountViewModel.demo`, a 600 ms fake `connect()`).
 
 ---
 
@@ -307,7 +312,7 @@ Small and targeted — this is a college project, not a QA suite.
 | `test/core/month_grid_test.dart` | month-start edge cases (Sunday and Saturday starts), Sunday-first alignment |
 | `test/modules/dashboard/widget_config_test.dart` | JSON round-trip for all 4 config types |
 | `test/modules/dashboard/dashboard_store_test.dart` | save → load → order preserved, unknown kind skipped |
-| `test/modules/pokemon/pokemon_model_test.dart` | PokeAPI JSON → `Pokemon`, dm→cm / hg→g conversion |
+| `test/modules/pokemon/pokemon_model_test.dart` | PokeAPI JSON → `Pokemon`, dm→cm / hg→g conversion, Spanish flavour text, type translation, `pokemonIdForDate` |
 | `test/modules/tasks/caldav_mapping_test.dart` | `CalendarTodo` → `Task` mapping, completed flag, no network |
 
 Widget tests and golden tests: stretch goal only. Everything above is pure Dart — no server, no
@@ -321,10 +326,10 @@ mocking framework.
 |---|---|---|
 | `model/ data/ view/` triad per module | `models/ services/ view_models/ views/` | Flat, no nesting, names say what they hold |
 | Plugin registry + `DashboardWidgetModule` interface | `WidgetKind` enum + one `switch` in `widget_factory.dart` | ~20 lines instead of an SPI; add the registry only past ~8 widget types |
-| DTO + mapper + API client + repository impl (4 files) | one `<x>_service.dart` + `fromJson` on the model | ~80 lines per integration instead of ~250 |
+| DTO + mapper + API client + repository impl (4 files) | one `<x>_service.dart` that owns its HTTP, timeout and errors + `fromJson` on the model | ~80 lines per integration instead of ~250 |
 | Hand-written WebDAV XML + iCal/VTODO parsing | `caldav` package with `CalendarTodo` | The one place where a dependency is much cheaper than the code |
 | `Result<T>` / `Either` | typed exceptions caught in view models | Fewer concepts to defend in a report |
-| DI container | constructor arguments from `app.dart` | One wiring site, no framework |
+| DI container | static `PokemonProvider.service`, overridable in tests | The card needs one dependency; a container is ceremony |
 | `go_router` | `Navigator.push` + `pop(result)` | No router config to learn; results type-check |
 | Localization (`.arb`) | Spanish strings inline | Second language is out of scope |
 | Clean's domain layer / use cases | none | There is no business logic to isolate — cards fetch and render |

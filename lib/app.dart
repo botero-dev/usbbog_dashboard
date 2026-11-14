@@ -5,14 +5,18 @@ import 'modules/dashboard/view_models/dashboard_view_model.dart';
 import 'modules/dashboard/views/dashboard_view.dart';
 
 class UsbbogDashboardApp extends StatefulWidget {
-  const UsbbogDashboardApp({super.key});
+  const UsbbogDashboardApp({super.key, this.dashboardViewModel});
+
+  /// Left `null` in production; tests may inject their own.
+  final DashboardViewModel? dashboardViewModel;
 
   @override
   State<UsbbogDashboardApp> createState() => _UsbbogDashboardAppState();
 }
 
 class _UsbbogDashboardAppState extends State<UsbbogDashboardApp> {
-  final DashboardViewModel _dashboard = DashboardViewModel.seeded();
+  late final DashboardViewModel _dashboard =
+      widget.dashboardViewModel ?? DashboardViewModel.seeded();
 
   @override
   void dispose() {

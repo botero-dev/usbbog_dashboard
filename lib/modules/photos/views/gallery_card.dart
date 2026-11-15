@@ -28,19 +28,48 @@ class GalleryCard extends StatefulWidget {
 }
 
 class _GalleryCardState extends State<GalleryCard> {
-  late final GalleryViewModel _viewModel = GalleryViewModel(
-    ImmichProvider.serviceFor(widget.accountId),
-    albumId: widget.albumId,
-  )..load();
+  GalleryViewModel? _viewModel;
+
+  @override
+  void initState() {
+    super.initState();
+    final account =
+        ImmichProvider.account(widget.accountId) ?? ImmichProvider.demoAccount;
+    if (account == null) {
+      return;
+    }
+    _viewModel = GalleryViewModel(
+      ImmichProvider.serviceFor(account.id),
+      albumId: widget.albumId,
+    )..load();
+  }
 
   @override
   void dispose() {
-    _viewModel.dispose();
+    _viewModel?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final viewModel = _viewModel;
+    if (viewModel == null) {
+      return SurfaceCard(
+        height: 168,
+        padding: const EdgeInsets.all(16),
+        borderColor: null,
+        color: AppColors.imagePlaceholder,
+        onLongPress: widget.onLongPress,
+        child: Center(
+          child: Text(
+            'Agrega una cuenta Immich desde el botón +',
+            textAlign: TextAlign.center,
+            style: AppText.caption.copyWith(color: AppColors.onLight),
+          ),
+        ),
+      );
+    }
+
     return SurfaceCard(
       height: 168,
       padding: EdgeInsets.zero,
@@ -48,13 +77,13 @@ class _GalleryCardState extends State<GalleryCard> {
       color: AppColors.imagePlaceholder,
       onLongPress: widget.onLongPress,
       child: ListenableBuilder(
-        listenable: _viewModel,
+        listenable: viewModel,
         builder: (context, _) => AsyncView(
-          isLoading: _viewModel.isLoading,
-          error: _viewModel.error,
-          onRetry: _viewModel.refresh,
+          isLoading: viewModel.isLoading,
+          error: viewModel.error,
+          onRetry: viewModel.refresh,
           foreground: AppColors.onLight,
-          builder: (context) => _photo(_viewModel),
+          builder: (context) => _photo(viewModel),
         ),
       ),
     );

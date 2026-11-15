@@ -8,8 +8,18 @@ import '../../support/fake_immich.dart';
 void main() {
   final built = <String>[];
 
+  const demo = ImmichAccount(
+    id: ImmichProvider.demoAccountId,
+    label: 'Demo · demo.immich.app',
+    baseUrl: 'https://demo.immich.app',
+    apiKey: 'demo-key',
+    isDemo: true,
+  );
+
   setUp(() {
     built.clear();
+    // The app ships without credentials, so tests opt in to a demo account.
+    ImmichProvider.demoAccount = demo;
     ImmichProvider.reset();
     ImmichProvider.builder = (baseUrl, apiKey) {
       built.add('$baseUrl|$apiKey');
@@ -21,7 +31,21 @@ void main() {
     };
   });
 
-  tearDown(ImmichProvider.reset);
+  tearDown(() {
+    ImmichProvider.demoAccount = null;
+    ImmichProvider.reset();
+  });
+
+  test('without demo credentials no account is offered', () {
+    ImmichProvider.demoAccount = null;
+    ImmichProvider.reset();
+
+    expect(ImmichProvider.accounts, isEmpty);
+    expect(
+      () => ImmichProvider.serviceFor('anything'),
+      throwsA(isA<ImmichException>()),
+    );
+  });
 
   test('starts with only the demo account', () {
     expect(ImmichProvider.accounts, hasLength(1));
@@ -64,8 +88,8 @@ void main() {
   test('serviceFor falls back to the demo account for a stale id', () {
     final service = ImmichProvider.serviceFor('no-longer-exists');
 
-    expect(service.baseUrl, ImmichProvider.demoAccount.baseUrl);
-    expect(built.single, startsWith(ImmichProvider.demoAccount.baseUrl));
+    expect(service.baseUrl, demo.baseUrl);
+    expect(built.single, startsWith(demo.baseUrl));
   });
 
   test('reset clears added accounts and cached services', () {

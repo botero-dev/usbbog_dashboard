@@ -19,6 +19,18 @@ class PokemonViewModel extends ChangeNotifier {
   bool _disposed = false;
 
   Future<void> load() async {
+    await _fetch(() {
+      final id = pokemonId;
+      return id == null ? _service.daily() : _service.byId(id);
+    });
+  }
+
+  /// Replaces the current Pokémon with a random one.
+  Future<void> loadRandom() => _fetch(_service.random);
+
+  Future<void> refresh() => load();
+
+  Future<void> _fetch(Future<Pokemon> Function() request) async {
     if (isLoading) {
       return;
     }
@@ -28,8 +40,7 @@ class PokemonViewModel extends ChangeNotifier {
     _notify();
 
     try {
-      final id = pokemonId;
-      pokemon = id == null ? await _service.daily() : await _service.byId(id);
+      pokemon = await request();
     } on Exception catch (failure) {
       error = failure.toString();
     }
@@ -37,8 +48,6 @@ class PokemonViewModel extends ChangeNotifier {
     isLoading = false;
     _notify();
   }
-
-  Future<void> refresh() => load();
 
   void _notify() {
     if (!_disposed) {

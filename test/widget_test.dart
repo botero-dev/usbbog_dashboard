@@ -1,6 +1,12 @@
+import 'dart:convert';
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:usbbog_dashboard/app.dart';
+import 'package:usbbog_dashboard/modules/photos/models/immich_account.dart';
 import 'package:usbbog_dashboard/modules/photos/services/immich_provider.dart';
 import 'package:usbbog_dashboard/modules/photos/services/immich_service.dart';
 import 'package:usbbog_dashboard/modules/photos/views/gallery_card.dart';
@@ -58,6 +64,15 @@ void main() {
 
   setUp(() {
     useApi();
+    // The app ships without demo credentials; tests enable a demo account so
+    // the Add Account flow has one to reuse.
+    ImmichProvider.demoAccount = const ImmichAccount(
+      id: ImmichProvider.demoAccountId,
+      label: 'Demo · demo.immich.app',
+      baseUrl: 'https://demo.immich.app',
+      apiKey: 'demo-key',
+      isDemo: true,
+    );
     ImmichProvider.reset();
     useImmich();
     caldavSessions.clear();
@@ -160,7 +175,8 @@ void main() {
     await pumpApp(tester);
     await settle(tester);
 
-    expect(find.byType(GalleryCard), findsOneWidget);
+    // The gallery card is not seeded: it needs an account.
+    expect(find.byType(GalleryCard), findsNothing);
 
     await tester.tap(find.text('+'));
     await settle(tester);
@@ -187,7 +203,7 @@ void main() {
     await settle(tester);
 
     expect(find.text('Hola, Andrés'), findsOneWidget);
-    expect(find.byType(GalleryCard), findsNWidgets(2));
+    expect(find.byType(GalleryCard), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox());
   });
@@ -232,14 +248,22 @@ void main() {
     await tester.tap(find.text('Holiday'));
     await settle(tester);
 
-    expect(find.byType(GalleryCard), findsNWidgets(2));
+    expect(find.byType(GalleryCard), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox());
   });
 
   testWidgets('the gallery card reports an Immich failure', (tester) async {
     useImmich(status: 401);
-    await pumpApp(tester);
+    useTallSurface(tester);
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: GalleryCard(accountId: ImmichProvider.demoAccountId),
+        ),
+      ),
+    );
     await settle(tester);
 
     expect(find.textContaining('clave de API'), findsOneWidget);
@@ -338,4 +362,80 @@ void main() {
 
     await tester.pumpWidget(const SizedBox());
   });
+
+  testWidgets('the gear opens the About screen in an app bar', (tester) async {
+    await pumpApp(tester);
+    await settle(tester);
+
+    await tester.tap(find.byIcon(Icons.settings_outlined));
+    await settle(tester);
+
+    expect(find.widgetWithText(AppBar, 'Acerca de'), findsOneWidget);
+    expect(find.text('PokeAPI'), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.arrow_back));
+    await settle(tester);
+    expect(find.text('Hola, Andrés'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('the Pokedex app bar draws a random Pokémon', (tester) async {
+    useTallSurface(tester);
+
+    // The daily id (320) and Haunter (93) keep the fake payload; any other id
+    // answers as Zubat, so the random action is observable.
+    final base = fakePokeApi();
+    PokemonProvider.service = PokemonService(
+      client: MockClient((request) async {
+        final match = RegExp(r'/pokemon/(\d+)$').firstMatch(request.url.path);
+        if (match != null && !['93', '320'].contains(match.group(1))) {
+          return http.Response(
+            jsonEncode({
+              ...haunterJson,
+              'id': int.parse(match.group(1)!),
+              'name': 'zubat',
+            }),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }
+        return base.get(request.url);
+      }),
+      now: () => DateTime(2026, 11, 16, 9, 32),
+      random: _FixedRandom(500),
+    );
+
+    await tester.pumpWidget(const UsbbogDashboardApp());
+    await settle(tester);
+
+    await tester.tap(find.text('Haunter'));
+    await settle(tester);
+    expect(find.text('Haunter'), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.shuffle));
+    await settle(tester);
+
+    // 1 + 500 % 1025 = 501, served by the fake as Zubat.
+    expect(find.text('Zubat'), findsOneWidget);
+    expect(find.widgetWithText(AppBar, 'Zubat'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox());
+  });
+}
+
+/// Always returns the same offset, so the random Pokémon is deterministic.
+class _FixedRandom implements Random {
+  _FixedRandom(this.offset);
+
+  final int offset;
+
+  @override
+  int nextInt(int max) => offset % max;
+
+  @override
+  double nextDouble() => 0;
+
+  @override
+  bool nextBool() => false;
 }

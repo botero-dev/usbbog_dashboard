@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../../about/views/about_view.dart';
 import '../models/widget_config.dart';
 import '../view_models/dashboard_view_model.dart';
 import '../widget_factory.dart';
@@ -23,49 +24,51 @@ class DashboardView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: AppTheme.dashboardBackground(),
-        child: SafeArea(
-          bottom: false,
-          child: ListenableBuilder(
-            listenable: viewModel,
-            builder: (context, _) {
-              final items = viewModel.items;
-              final blocks = <Widget>[
-                GreetingHeader(
-                  name: userName,
-                  onSettings: () => _openSettings(context),
-                ),
-                if (items.isEmpty)
-                  const EmptyDashboard()
-                else
-                  for (final item in items)
-                    WidgetFactory.build(
-                      context,
-                      item,
-                      onLongPress: () => viewModel.remove(item.id),
-                    ),
-                AddWidgetTile(onTap: () => _addWidget(context)),
-              ];
+      body: SizedBox.expand(
+        child: Container(
+          decoration: AppTheme.dashboardBackground(),
+          child: SafeArea(
+            bottom: false,
+            child: ListenableBuilder(
+              listenable: viewModel,
+              builder: (context, _) {
+                final items = viewModel.items;
+                final blocks = <Widget>[
+                  GreetingHeader(
+                    name: userName,
+                    onSettings: () => _openSettings(context),
+                  ),
+                  if (items.isEmpty)
+                    const EmptyDashboard()
+                  else
+                    for (final item in items)
+                      WidgetFactory.build(
+                        context,
+                        item,
+                        onLongPress: () => viewModel.remove(item.id),
+                      ),
+                  AddWidgetTile(onTap: () => _addWidget(context)),
+                ];
 
-              return SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.page,
-                  AppSpacing.page,
-                  AppSpacing.page,
-                  AppSpacing.block,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    for (var index = 0; index < blocks.length; index++) ...[
-                      if (index > 0) const SizedBox(height: AppSpacing.block),
-                      blocks[index],
+                return SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.page,
+                    AppSpacing.page,
+                    AppSpacing.page,
+                    AppSpacing.block,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (var index = 0; index < blocks.length; index++) ...[
+                        if (index > 0) const SizedBox(height: AppSpacing.block),
+                        blocks[index],
+                      ],
                     ],
-                  ],
-                ),
-              );
-            },
+                  ),
+                );
+              },
+            ),
           ),
         ),
       ),
@@ -82,8 +85,7 @@ class DashboardView extends StatelessWidget {
   }
 
   void _openSettings(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Ajustes: sin diseño todavía')),
-    );
+    Navigator.of(context)
+        .push(MaterialPageRoute<void>(builder: (_) => const AboutView()));
   }
 }

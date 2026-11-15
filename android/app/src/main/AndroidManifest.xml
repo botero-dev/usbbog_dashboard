@@ -3,7 +3,7 @@
          the dashboard talks to PokeAPI and Immich in every build. -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <application
-        android:label="usbbog_dashboard"
+        android:label="Tablero"
         android:name="${applicationName}"
         android:networkSecurityConfig="@xml/network_security_config"
         android:icon="@mipmap/ic_launcher">

@@ -15,18 +15,25 @@ Screens are 412×917 with 20 px page padding.
 
 | # | Screen | Figma node | Notes |
 |---|--------|-----------|-------|
-| 1 | Dashboard | `1:4` | scrollable card stack + empty state |
+| 1 | Dashboard | `1:4` | scrollable card stack + empty state (root, no bottom bar) |
 | 2 | Add widget | `1:50` | 4 widget types |
 | 3 | Select account | `9:60` | saved accounts + "Add Account" |
 | 4 | Add account | `9:85` | Server / User / Pass → Connect (validates) |
 | 5 | Select list | `9:102` | albums for the chosen account |
 | 6 | Pokedex | `1:49` | Pokémon detail |
+| 7 | About | — | description, data sources, links, credits (gear in the header) |
+
+The dashboard keeps the Figma layout with no bottom bar. Every internal screen
+(Add widget, Select account, Add account, Select list, Pokedex, Photo, About)
+uses `WireframeScaffold`, which renders a Material `AppBar` (blue, 106 px,
+centered title, circular back button, optional actions) — the Pokedex app bar
+also carries the random-Pokémon action.
 
 ### Out of scope (v1)
 
 | Thing | Decision |
 |-------|----------|
-| Settings screen | Gear stays in the header but is a no-op. No content was designed. |
+| Settings screen | The gear opens the About screen; no form-style settings were designed. |
 | "Reloj del sistema" `1:51`, "Calendario del sistema" `1:52` | Not screens. Tapping the clock/mini-calendar opens the **OS** apps via `url_launcher`. |
 | Widget reorder / delete | Not designed. Stretch goal: long-press → delete. |
 | OAuth, photo upload, editing | Read-only API-key access. |
@@ -45,17 +52,17 @@ Accounts are backend-agnostic — the design's `Server / User / Pass` form serve
 alike; an `AccountKind` field says which.
 
 **Immich accounts:** `ImmichProvider` holds a list of accounts plus one `ImmichService` per
-account. It starts with Immich's public demo instance (`https://demo.immich.app`) and its
-read-only demo API key, so the gallery card has content with no setup. The add flow offers that
-account or lets you enter another server + API key, validated against the server before it is
-saved. Demo host/key are `String.fromEnvironment`, overridable without editing code:
+account. No credentials live in the repository: the built-in account only exists when
+`IMMICH_API_KEY` (and optionally `IMMICH_BASE_URL`) is passed at build time, so the gallery card
+is added from the `+` flow instead of being seeded. The add flow offers that account or lets you
+enter another server + API key, validated against the server before it is saved:
 
 ```
 flutter run --dart-define=IMMICH_BASE_URL=https://immich.example.com \
             --dart-define=IMMICH_API_KEY=<key>
 ```
 
-The demo key only grants read access to the public demo library — never commit a real key.
+Never commit a real key.
 
 **Server URL rules** (`ImmichService.normalizeBaseUrl`), so a LAN instance on Immich's default
 port works without typing a scheme:
@@ -256,14 +263,17 @@ list to `dashboard.v1`.
 ## 5. Navigation map
 
 From the prototype (flow "App" starts at `Dashboard`); `→` = push, `←` = pop.
+There is no bottom navigation: the dashboard is the root and every internal
+screen is pushed on top with its own app bar.
 
 ```
 Dashboard 1:4
 ├─ tap "9:32"          → url_launcher: OS clock        (design screen 1:51 dropped)
 ├─ tap mini calendar   → url_launcher: OS calendar     (design screen 1:52 dropped)
 ├─ tap Pokémon card    → Pokedex 1:49                  ← back
+│                        (app bar action → random Pokémon, same screen)
 ├─ tap "Tareas" rows   → toggles locally (stays)
-├─ tap gear            → no-op in v1
+├─ tap gear            → About                         ← back
 └─ tap "+"             → Add widget 1:50               ← back
 
 Add widget 1:50   (tap a type)
@@ -326,11 +336,13 @@ matches the design).
 dependencies:
   http: ^1.2.0                  # PokeAPI + Immich
   caldav: ^1.5.0                # CalDAV: discovery, calendars, VTODO CRUD (brings dio)
-  shared_preferences: ^2.3.0    # dashboard layout, account list
-  flutter_secure_storage: ^9.2.0 # passwords
-  url_launcher: ^6.3.0          # open OS clock / calendar
-  intl: ^0.19.0                 # Spanish date/time formatting
+  cupertino_icons: ^1.0.8       # icon set
 ```
+
+`intl`, `url_launcher`, `shared_preferences` and `flutter_secure_storage` are
+still planned; Spanish dates are formatted by `core/utils/formatters.dart`, the
+clock/calendar tiles do not deep-link yet, and the dashboard layout lives in
+memory (see milestone M2).
 
 No `go_router`, no `riverpod`/`bloc`, no `freezed`/`json_serializable`, no code generation.
 
@@ -352,9 +364,13 @@ It has low adoption (≈800 downloads), so pin it; if it misbehaves the fallback
 | **M3** | Pokémon: `pokemon_service.dart` (PokeAPI), card, Pokedex view | Card and detail show real Haunter data |
 | **M4** | ✅ CalDAV tasks: `caldav_session`/`caldav_service`/`caldav_provider`, account picker + add-account, VTODO list picker, `tasks_card` with `getTodos`/`updateTodo` | A real CalDAV task appears and checking it survives a refresh — verified against Fastmail (read) and a local Radicale (write) |
 | **M5** | ✅ Photos (Immich): `immich_service.dart`, `album_picker_view`, `gallery_card`, `photo_view` | A real album photo renders on the dashboard — verified against `demo.immich.app` |
-| **M6** | Polish: empty state, loading/error+retry on every card, spacing/typography pass, unit tests, README update | All 6 screens reachable; no red screens on airplane mode |
+| **M6** | ✅ Polish: empty state, loading/error+retry on every card, app bar on every internal screen, About screen, random Pokémon, local assets, unit tests, README + PDF | All 7 screens reachable; no red screens on airplane mode |
 
 Each milestone is independently demoable and leaves the app runnable.
+
+**Current state:** M0–M6 done. Persistence (`shared_preferences`), OS deep links
+(`url_launcher`) and the settings screen remain open; the dashboard starts with
+clock, Pokémon and tasks, and the gallery is added from `+`.
 
 ---
 
@@ -364,14 +380,17 @@ Small and targeted — this is a college project, not a QA suite.
 
 | Test | Covers |
 |---|---|
-| `test/core/month_grid_test.dart` | month-start edge cases (Sunday and Saturday starts), Sunday-first alignment |
-| `test/modules/dashboard/widget_config_test.dart` | JSON round-trip for all 4 config types |
-| `test/modules/dashboard/dashboard_store_test.dart` | save → load → order preserved, unknown kind skipped |
 | `test/modules/pokemon/pokemon_model_test.dart` | PokeAPI JSON → `Pokemon`, dm→cm / hg→g conversion, Spanish flavour text, type translation, `pokemonIdForDate` |
-| `test/modules/tasks/caldav_mapping_test.dart` | `CalendarTodo` → `Task` mapping, completed flag, no network |
+| `test/modules/pokemon/pokemon_service_test.dart` | daily id, cache, `random()` inside the dex range, error translation |
+| `test/modules/photos/immich_service_test.dart` | URL normalisation, album/photo mapping, auth errors |
+| `test/modules/photos/immich_provider_test.dart` | demo account gating, service cache, stale ids |
+| `test/modules/photos/album_picker_view_model_test.dart` | album list filtering |
+| `test/modules/tasks/caldav_service_test.dart` | connect once, list/task mapping, writes, auth errors |
+| `test/modules/tasks/tasks_view_model_test.dart` | setup state, load, toggle, rejected write |
+| `test/widget_test.dart` | dashboard, Pokémon card and detail, add-gallery and add-tasks flows, tabs and random action |
 
-Widget tests and golden tests: stretch goal only. Everything above is pure Dart — no server, no
-mocking framework.
+Everything runs without network: PokeAPI, Immich and CalDAV are replaced by fake
+clients/sessions. 65 tests, `flutter analyze` clean.
 
 ---
 

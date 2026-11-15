@@ -25,7 +25,7 @@ class GreetingHeader extends StatelessWidget {
           ),
           IconButton(
             onPressed: onSettings,
-            tooltip: 'Ajustes',
+            tooltip: 'Acerca de',
             icon: const Icon(
               Icons.settings_outlined,
               size: 24,

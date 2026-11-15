@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:http/http.dart' as http;
 
@@ -21,14 +22,17 @@ class PokemonService {
   PokemonService({
     http.Client? client,
     DateTime Function()? now,
+    Random? random,
     this.timeout = const Duration(seconds: 10),
   }) : _client = client ?? http.Client(),
-       _now = now ?? DateTime.now;
+       _now = now ?? DateTime.now,
+       _random = random ?? Random();
 
   static const baseUrl = 'https://pokeapi.co/api/v2';
 
   final http.Client _client;
   final DateTime Function() _now;
+  final Random _random;
   final Duration timeout;
 
   int? _dexCount;
@@ -52,6 +56,15 @@ class PokemonService {
     final date = day ?? _now();
     final count = await dexCount();
     return byId(pokemonIdForDate(date, count));
+  }
+
+  /// A different Pokémon on every call, drawn at random from the whole dex.
+  Future<Pokemon> random() async {
+    final count = await dexCount();
+    if (count <= 0) {
+      return byId(1);
+    }
+    return byId(1 + _random.nextInt(count));
   }
 
   Future<Pokemon> byId(int id) async {

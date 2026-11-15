@@ -8,24 +8,16 @@ class DashboardViewModel extends ChangeNotifier {
   DashboardViewModel({List<DashboardItem>? items})
     : _items = [...?items]..sort((a, b) => a.order.compareTo(b.order));
 
-  /// Same cards as the Figma dashboard, so every button is reachable on launch.
+  /// Same cards as the Figma dashboard, minus the Immich gallery: it needs an
+  /// account, so it is only added from the "+" flow.
   factory DashboardViewModel.seeded() {
     return DashboardViewModel(
       items: const [
         DashboardItem(id: 'clock', order: 0, config: ClockConfig()),
         DashboardItem(id: 'pokemon', order: 1, config: PokemonConfig()),
         DashboardItem(
-          id: 'gallery',
-          order: 2,
-          config: GalleryConfig(
-            accountId: 'immich-demo',
-            albumId: '',
-            label: 'Galería',
-          ),
-        ),
-        DashboardItem(
           id: 'tasks',
-          order: 3,
+          order: 2,
           config: TasksConfig(accountId: '', listId: '', label: 'Tareas'),
         ),
       ],

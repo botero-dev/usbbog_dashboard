@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:usbbog_dashboard/modules/pokemon/services/pokemon_service.dart';
@@ -44,6 +46,20 @@ void main() {
 
     // Same day is served from the cache; a new day is a new id.
     expect(pokemonCalls, ['/api/v2/pokemon/320', '/api/v2/pokemon/321']);
+  });
+
+  test('random() draws an id inside the dex range', () async {
+    final paths = <String>[];
+    final service = PokemonService(
+      client: _RecordingClient(fakePokeApi(), paths.add),
+      random: Random(7),
+    );
+
+    await service.random();
+
+    // The fake reports 1025 species; the seeded generator is reproducible.
+    final expectedId = 1 + Random(7).nextInt(1025);
+    expect(paths, contains('/api/v2/pokemon/$expectedId'));
   });
 
   test('byId() caches the result', () async {

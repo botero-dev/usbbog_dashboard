@@ -11,6 +11,7 @@ de una galería personal y la lista de tareas pendientes.
 | **Repositorio** | <https://github.com/botero-dev/usbbog_dashboard> |
 | **Diseño en Figma** | <https://www.figma.com/design/scjsoLRlPRoRtvTiT5HzU8/Tablero> |
 | **Documento del proyecto** | [docs/Tablero.pdf](docs/Tablero.pdf) |
+| **Video demo** | <https://www.youtube.com/watch?v=r8xu0PQvg2Y> |
 
 ## Qué es
 

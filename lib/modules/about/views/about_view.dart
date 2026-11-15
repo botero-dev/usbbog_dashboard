@@ -87,7 +87,7 @@ class AboutView extends StatelessWidget {
           const SizedBox(height: 24),
           const _SectionTitle('Créditos'),
           Text(
-            'Taller de Interacción Humano-Computador · Universidad Simón Bolívar '
+            'Taller de Interacción Humano-Computador · Universidad de San Buenaventura '
             '· Andrés Botero',
             style: AppText.caption.copyWith(color: Colors.black54, height: 1.5),
           ),

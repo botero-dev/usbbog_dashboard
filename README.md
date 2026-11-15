@@ -211,5 +211,5 @@ aleatoria. `flutter analyze` no reporta problemas.
 
 ## Créditos
 
-Taller de Interacción Humano-Computador · Universidad Simón Bolívar ·
+Taller de Interacción Humano-Computador · Universidad de San Buenaventura ·
 Andrés Botero.

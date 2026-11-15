@@ -26,11 +26,7 @@ class DashboardViewModel extends ChangeNotifier {
         DashboardItem(
           id: 'tasks',
           order: 3,
-          config: TasksConfig(
-            accountId: 'demo',
-            listId: 'mis-tareas',
-            label: 'Mis Tareas',
-          ),
+          config: TasksConfig(accountId: '', listId: '', label: 'Tareas'),
         ),
       ],
     );

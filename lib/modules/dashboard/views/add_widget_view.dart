@@ -1,26 +1,21 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_theme.dart';
-import '../../../shared/views/option_picker_view.dart';
 import '../../../shared/widgets/primary_button.dart';
 import '../../../shared/widgets/wireframe_scaffold.dart';
-import '../../accounts/models/account.dart';
-import '../../accounts/views/select_account_view.dart';
 import '../../photos/models/album.dart';
 import '../../photos/models/immich_account.dart';
 import '../../photos/views/album_picker_view.dart';
 import '../../photos/views/immich_account_picker_view.dart';
+import '../../tasks/models/caldav_account.dart';
 import '../../tasks/models/task_list.dart';
+import '../../tasks/views/caldav_account_picker_view.dart';
+import '../../tasks/views/task_list_picker_view.dart';
 import '../models/widget_config.dart';
 
 /// `1:50` — pick a widget type. Pops the resulting [WidgetConfig].
 class AddWidgetView extends StatelessWidget {
   const AddWidgetView({super.key});
-
-  // Replaced by `caldav_service` in M4.
-  static const _demoTaskLists = [
-    TaskList(id: 'mis-tareas', displayName: 'Mis Tareas'),
-  ];
 
   @override
   Widget build(BuildContext context) {
@@ -55,9 +50,7 @@ class AddWidgetView extends StatelessWidget {
     );
   }
 
-  /// Immich ships with the demo host and key in [ImmichProvider], so the album
-  /// list is the only step — no account screen.
-  /// Account (demo or newly added) -> album.
+  /// Immich account (demo or newly added) -> album.
   Future<void> _addGallery(BuildContext context) async {
     final account = await Navigator.of(context).push<ImmichAccount>(
       MaterialPageRoute(builder: (_) => const ImmichAccountPickerView()),
@@ -82,33 +75,28 @@ class AddWidgetView extends StatelessWidget {
     );
   }
 
+  /// CalDAV account (existing or newly added) -> task list.
   Future<void> _addTasks(BuildContext context) async {
-    final account = await Navigator.of(context).push<Account>(
-      MaterialPageRoute(
-        builder: (_) => const SelectAccountView(kind: AccountKind.caldav),
-      ),
+    final account = await Navigator.of(context).push<CaldavAccount>(
+      MaterialPageRoute(builder: (_) => const CaldavAccountPickerView()),
     );
     if (account == null || !context.mounted) {
       return;
     }
 
-    final list = await Navigator.of(context).push<PickerOption>(
-      MaterialPageRoute(
-        builder: (_) => OptionPickerView(
-          title: 'Select List',
-          options: [
-            for (final taskList in _demoTaskLists)
-              PickerOption(id: taskList.id, label: taskList.displayName),
-          ],
-        ),
-      ),
+    final list = await Navigator.of(context).push<TaskList>(
+      MaterialPageRoute(builder: (_) => TaskListPickerView(account: account)),
     );
     if (list == null || !context.mounted) {
       return;
     }
 
     Navigator.of(context).pop(
-      TasksConfig(accountId: account.id, listId: list.id, label: list.label),
+      TasksConfig(
+        accountId: account.id,
+        listId: list.id,
+        label: list.displayName,
+      ),
     );
   }
 }

@@ -39,7 +39,7 @@ Screens are 412×917 with 20 px page padding.
 | Fecha/Hora | device clock + `url_launcher` | — | decided |
 | Pokemon del dia | PokeAPI (`https://pokeapi.co/api/v2`) | none | decided |
 | Galeria Immich | Immich REST | **API key** (`x-api-key`) | done — HTTP or HTTPS, any port |
-| Lista de Tareas | **CalDAV** (VTODO) | username + password | decided |
+| Lista de Tareas | **CalDAV** (VTODO) | username + app password | done — see below |
 
 Accounts are backend-agnostic — the design's `Server / User / Pass` form serves CalDAV and Immich
 alike; an `AccountKind` field says which.
@@ -172,12 +172,20 @@ lib/
     │       ├── add_immich_account_view.dart   # 9:85 for Immich (Server + API key)
     │       └── album_picker_view.dart         # 9:102 for Immich
     ├── tasks/
-    │   ├── models/task.dart                   # id, summary, isDone, due
+    │   ├── models/task.dart                   # uid, summary, listId, isDone, due
     │   ├── models/task_list.dart              # uid + displayName (a VTODO calendar)
-    │   ├── services/caldav_service.dart       # connect, task lists, todos, complete
+    │   ├── models/caldav_account.dart         # id, label, baseUrl, user, password
+    │   ├── services/caldav_session.dart       # interface + `caldav`-backed impl
+    │   ├── services/caldav_service.dart       # session lifecycle, failure translation
+    │   ├── services/caldav_provider.dart      # static account list + service per account
     │   ├── view_models/tasks_view_model.dart
+    │   ├── view_models/task_list_picker_view_model.dart
+    │   ├── view_models/add_caldav_account_view_model.dart
     │   └── views/
     │       ├── tasks_card.dart                # 9:46
+    │       ├── caldav_account_picker_view.dart # 9:60 for CalDAV
+    │       ├── add_caldav_account_view.dart   # 9:85 for CalDAV (Server/User/Pass)
+    │       ├── task_list_picker_view.dart     # 9:102 for CalDAV
     │       └── widgets/checkbox_row.dart
     └── accounts/
         ├── models/account.dart                # id, kind (immich|caldav), label, server, user; no password
@@ -193,16 +201,17 @@ lib/
 The "Select List" step is a generic picker in `shared/views/` because both photos (albums) and
 tasks (VTODO calendars) need one.
 
-**Status:** M0 ✅ · M1 ✅ except OS deep links (`url_launcher`) · **M3 ✅** · **M5 ✅**
-(gallery, Immich) · M2 persistence and M4 (CalDAV) pending. Built: theme, `formatters`/`month_grid`/`system_apps`,
+**Status:** M0 ✅ · M1 ✅ except OS deep links (`url_launcher`) · **M3 ✅** · **M4 ✅** (CalDAV) ·
+**M5 ✅** (gallery, Immich) · M2 persistence pending. Built: theme, `formatters`/`month_grid`/`system_apps`,
 `PokemonService` (own HTTP + timeouts) + `PokemonProvider`, the shared widgets (`surface_card`, `primary_button`,
 `wireframe_scaffold`, `async_view`, `option_picker_view`), all six screens, the full navigation map,
 and the real Pokémon card + Pokedex reading PokeAPI (Spanish types and flavour text, official
 artwork, day-of-year pick, in-memory cache, error + retry) and the gallery card + fullscreen viewer
 reading Immich (account picker, add-account with validation, albums, `POST /search/metadata`,
-photo of the day, fullscreen viewer). Still demo data: tasks and the CalDAV account screens
-(`SelectAccountViewModel.demo`, a 600 ms fake `connect()`). Immich accounts live in memory only —
-they survive navigation but not an app restart until M2 persistence lands.
+photo of the day, fullscreen viewer). Tasks read and write real VTODO items over CalDAV (account picker, add-account with
+validation, VTODO list picker, optimistic checkbox that reverts on failure). No demo data
+remains in any card. Immich and CalDAV accounts live in memory only — they survive navigation
+but not an app restart until M2 persistence lands.
 
 ---
 
@@ -268,8 +277,11 @@ Select account 9:60
 ├─ Add Account   → Add account 9:85 (Connect validates, then saves) → Select list 9:102
 └─ back          ← Add widget
 
-Select list 9:102 → albums (photos, Immich) or VTODO calendars (tasks, CalDAV)
+Select list 9:102 → albums (Immich) or VTODO calendars (CalDAV)
 └─ tapping one pops a GalleryConfig / TasksConfig back to Dashboard
+
+CalDAV: Select account 9:60 → Add Account 9:85 (Server/User/Pass, validated by discovery)
+        → Connect returns straight to Select List, as in the prototype.
 ```
 
 Prototype gaps this plan closes: *Select list* was a dead end (it now pops a config back to the
@@ -338,7 +350,7 @@ It has low adoption (≈800 downloads), so pin it; if it misbehaves the fallback
 | **M1** | Clock card: live time, mini calendar from `month_grid.dart`, long date, OS deep links | Tapping the clock opens the phone's clock app |
 | **M2** | Persistence + add/remove: `dashboard.v1`, `Add widget` picker (the two account-free types enabled, the other two marked "próximamente"), long-press to delete | Layout survives app restart |
 | **M3** | Pokémon: `pokemon_service.dart` (PokeAPI), card, Pokedex view | Card and detail show real Haunter data |
-| **M4** | Accounts + Tasks: `account_service.dart` (secure storage), `add_account_view` (validates with `CalDavClient.connect`), `select_account_view`, task-list picker, `tasks_card` with `getTodos` / `updateTodo` | A real CalDAV task appears and checking it survives a refresh |
+| **M4** | ✅ CalDAV tasks: `caldav_session`/`caldav_service`/`caldav_provider`, account picker + add-account, VTODO list picker, `tasks_card` with `getTodos`/`updateTodo` | A real CalDAV task appears and checking it survives a refresh — verified against Fastmail (read) and a local Radicale (write) |
 | **M5** | ✅ Photos (Immich): `immich_service.dart`, `album_picker_view`, `gallery_card`, `photo_view` | A real album photo renders on the dashboard — verified against `demo.immich.app` |
 | **M6** | Polish: empty state, loading/error+retry on every card, spacing/typography pass, unit tests, README update | All 6 screens reachable; no red screens on airplane mode |
 
@@ -391,8 +403,20 @@ nothing above blocks that.
    VTODO-capable calendar (`TaskList { uid, displayName }`); ticking a row calls
    `updateTodo(todo.copyWith(status: completed))`, so completion is stored on the server.
 2. **Immich auth is an API key**, not a login: `ImmichProvider` uses the public demo host and a
-   read-only demo key (overridable with `--dart-define`). The gallery widget therefore skips the
-   account screen and goes straight to the album picker.
+   read-only demo key (overridable with `--dart-define`).
+3. **CalDAV has no demo account.** Credentials are personal, so `CalDavProvider` starts empty and
+   the seeded tasks card invites setup instead of erroring. For local development they can come
+   from `--dart-define=CALDAV_BASE_URL/CALDAV_USERNAME/CALDAV_PASSWORD`; they are never written
+   to the repo, and the password stays in memory (secure storage is M2's job).
+4. **Connection is discovery-first.** The package's `CalDavClient.connect` verifies credentials
+   with a PROPFIND on the bare host, which Fastmail answers with 404 — valid credentials then look
+   wrong. `PackageCalDavSession` calls `discover()` instead (starting at `/.well-known/caldav`),
+   which also maps a 401 on the principal lookup to "credenciales incorrectas".
+5. **Only VTODO calendars are offered**, and read-only ones are skipped. Fastmail's schedule
+   Inbox/Outbox advertise VTODO but are not real task lists.
+6. **Completing a task writes `STATUS:COMPLETED` + `COMPLETED` + `PERCENT-COMPLETE:100`**;
+   un-completing writes `STATUS:NEEDS-ACTION` and drops `COMPLETED`. `CalendarTodo.copyWith`
+   cannot clear `completed`, so the session builds a fresh todo for that transition.
 3. **Pokémon of the day:** `dayOfYear % dexCount` — deterministic, no backend.
 4. **Pokémon image:** `sprites.other['official-artwork'].front_default`, falling back to
    `sprites.front_default` (the design's 131×131 placeholder).

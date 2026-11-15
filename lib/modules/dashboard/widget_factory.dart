@@ -27,7 +27,12 @@ class WidgetFactory {
         albumId: albumId,
         onLongPress: onLongPress,
       ),
-      TasksConfig() => TasksCard(key: key, onLongPress: onLongPress),
+      TasksConfig(:final accountId, :final listId) => TasksCard(
+        key: key,
+        accountId: accountId,
+        listId: listId,
+        onLongPress: onLongPress,
+      ),
     };
   }
 }

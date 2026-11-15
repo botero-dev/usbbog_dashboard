@@ -5,8 +5,12 @@ import 'package:usbbog_dashboard/modules/photos/services/immich_provider.dart';
 import 'package:usbbog_dashboard/modules/photos/services/immich_service.dart';
 import 'package:usbbog_dashboard/modules/photos/views/gallery_card.dart';
 import 'package:usbbog_dashboard/modules/pokemon/services/pokemon_provider.dart';
+import 'package:usbbog_dashboard/modules/tasks/services/caldav_provider.dart';
+import 'package:usbbog_dashboard/modules/tasks/services/caldav_service.dart';
+import 'package:usbbog_dashboard/modules/tasks/views/tasks_card.dart';
 import 'package:usbbog_dashboard/modules/pokemon/services/pokemon_service.dart';
 
+import 'support/fake_caldav_session.dart';
 import 'support/fake_immich.dart';
 import 'support/fake_pokeapi.dart';
 
@@ -37,15 +41,33 @@ void main() {
     );
   }
 
+  /// CalDAV never reaches a real server either; the fake session records writes.
+  final caldavSessions = <FakeCalDavSession>[];
+
+  void useCalDav({bool failOnWrite = false}) {
+    CalDavProvider.reset();
+    CalDavProvider.builder = (account) {
+      final session = FakeCalDavSession(
+        tasks: {'l1': defaultTasks},
+        failOnWrite: failOnWrite,
+      );
+      caldavSessions.add(session);
+      return CalDavService(account: account, connect: (_) async => session);
+    };
+  }
+
   setUp(() {
     useApi();
     ImmichProvider.reset();
     useImmich();
+    caldavSessions.clear();
+    useCalDav();
   });
 
   tearDown(() {
     PokemonProvider.reset();
     ImmichProvider.reset();
+    CalDavProvider.reset();
   });
 
   Future<void> pumpApp(WidgetTester tester) async {
@@ -225,6 +247,19 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
+  testWidgets('the seeded tasks card asks for CalDAV setup', (tester) async {
+    await pumpApp(tester);
+    await settle(tester);
+
+    // No account configured yet, so it invites setup instead of erroring.
+    expect(
+      find.text('Agrega una cuenta CalDAV desde el botón +'),
+      findsOneWidget,
+    );
+
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('add tasks: Connect skips back to Select List', (tester) async {
     await pumpApp(tester);
     await settle(tester);
@@ -241,24 +276,65 @@ void main() {
     expect(find.text('Add Account'), findsOneWidget);
     expect(find.text('Connect'), findsOneWidget);
 
+    // Empty fields are rejected before any request.
+    await tester.tap(find.text('Connect'));
+    await settle(tester);
+    expect(find.textContaining('Completa servidor'), findsOneWidget);
+
     final fields = find.byType(TextField);
     await tester.enterText(fields.at(0), 'https://cal.example.com');
-    await tester.enterText(fields.at(1), 'andres');
-    await tester.enterText(fields.at(2), 'secret');
+    await tester.enterText(fields.at(1), 'andres@example.com');
+    await tester.enterText(fields.at(2), 'app-password');
 
     await tester.tap(find.text('Connect'));
     await settle(tester);
-    await tester.pump(const Duration(milliseconds: 700));
     await settle(tester);
 
     // Connect goes straight to Select List, as in the prototype.
     expect(find.text('Select List'), findsOneWidget);
+    expect(
+      CalDavProvider.accounts.map((a) => a.username),
+      contains('andres@example.com'),
+    );
 
     await tester.tap(find.text('Mis Tareas'));
     await settle(tester);
 
-    // A second tasks card was added to the dashboard.
-    expect(find.text('Tus tareas:'), findsNWidgets(2));
+    // A second tasks card was added, now backed by the fake session.
+    expect(find.byType(TasksCard), findsNWidgets(2));
+    expect(find.text('Leer los 4 acuerdos'), findsWidgets);
+
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('checking a task writes through to CalDAV', (tester) async {
+    await pumpApp(tester);
+    await settle(tester);
+
+    await tester.tap(find.text('+'));
+    await settle(tester);
+    await tester.tap(find.text('Lista de Tareas'));
+    await settle(tester);
+    await tester.tap(find.text('Add Account'));
+    await settle(tester);
+
+    final fields = find.byType(TextField);
+    await tester.enterText(fields.at(0), 'https://cal.example.com');
+    await tester.enterText(fields.at(1), 'andres@example.com');
+    await tester.enterText(fields.at(2), 'app-password');
+    await tester.tap(find.text('Connect'));
+    await settle(tester);
+    await settle(tester);
+    await tester.tap(find.text('Mis Tareas'));
+    await settle(tester);
+
+    // The new card resolves its tasks from the session.
+    expect(find.text('Leer los 4 acuerdos'), findsWidgets);
+
+    await tester.tap(find.text('Leer los 4 acuerdos').last);
+    await settle(tester);
+
+    expect(caldavSessions.expand((s) => s.writes), contains('t1:true'));
 
     await tester.pumpWidget(const SizedBox());
   });

@@ -37,6 +37,7 @@ dependencies:
 
   # PokeAPI (M3). Immich and CalDAV reuse this client.
   http: ^1.2.0
+  caldav: ^1.5.0
 
 dev_dependencies:
   flutter_test:

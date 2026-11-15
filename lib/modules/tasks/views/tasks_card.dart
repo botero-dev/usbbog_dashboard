@@ -1,14 +1,20 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../../../shared/widgets/async_view.dart';
 import '../../../shared/widgets/surface_card.dart';
 import '../models/task.dart';
+import '../services/caldav_provider.dart';
+import '../view_models/tasks_view_model.dart';
 import 'widgets/checkbox_row.dart';
 
 /// Dashboard to-do tile (`9:46`).
 class TasksCard extends StatefulWidget {
-  const TasksCard({super.key, this.onLongPress});
+  const TasksCard({super.key, this.accountId, this.listId, this.onLongPress});
 
+  /// CalDAV account; empty means "not configured yet".
+  final String? accountId;
+  final String? listId;
   final VoidCallback? onLongPress;
 
   @override
@@ -16,24 +22,17 @@ class TasksCard extends StatefulWidget {
 }
 
 class _TasksCardState extends State<TasksCard> {
-  // Replaced by `caldav_service.getTodos` in M4; toggling then writes back.
-  static const _demoTasks = [
-    Task(id: '1', summary: 'Entregar proyecto de clase'),
-    Task(id: '2', summary: 'Entregar proyecto de clase'),
-    Task(id: '3', summary: 'Entregar proyecto de clase'),
-  ];
+  static const _maxVisible = 5;
 
-  List<Task> _tasks = _demoTasks;
+  late final TasksViewModel _viewModel = TasksViewModel(
+    CalDavProvider.serviceFor(widget.accountId),
+    listId: widget.listId,
+  )..load();
 
-  void _toggle(Task task) {
-    setState(() {
-      _tasks = [
-        for (final current in _tasks)
-          current.id == task.id
-              ? current.copyWith(isDone: !current.isDone)
-              : current,
-      ];
-    });
+  @override
+  void dispose() {
+    _viewModel.dispose();
+    super.dispose();
   }
 
   @override
@@ -41,17 +40,66 @@ class _TasksCardState extends State<TasksCard> {
     return SurfaceCard(
       padding: const EdgeInsets.all(12),
       onLongPress: widget.onLongPress,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Tus tareas:', style: AppText.title),
-          for (final task in _tasks)
-            Padding(
-              padding: const EdgeInsets.only(top: 10),
-              child: CheckboxRow(task: task, onChanged: () => _toggle(task)),
-            ),
-        ],
+      child: ListenableBuilder(
+        listenable: _viewModel,
+        builder: (context, _) => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Tus tareas:', style: AppText.title),
+            const SizedBox(height: 8),
+            if (_viewModel.needsSetup)
+              const _Hint('Agrega una cuenta CalDAV desde el botón +')
+            else
+              AsyncView(
+                isLoading: _viewModel.isLoading,
+                error: _viewModel.error,
+                onRetry: _viewModel.load,
+                builder: (context) => _list(_viewModel.tasks),
+              ),
+          ],
+        ),
       ),
+    );
+  }
+
+  Widget _list(List<Task> tasks) {
+    if (tasks.isEmpty) {
+      return const _Hint('No hay tareas en esta lista');
+    }
+
+    return Column(
+      children: [
+        for (final task in tasks.take(_maxVisible))
+          Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: CheckboxRow(
+              task: task,
+              onChanged: () => _viewModel.toggle(task),
+            ),
+          ),
+        if (tasks.length > _maxVisible)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              '+${tasks.length - _maxVisible} más',
+              style: AppText.caption.copyWith(color: Colors.white70),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _Hint extends StatelessWidget {
+  const _Hint(this.message);
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Text(message, style: AppText.body.copyWith(color: Colors.white70)),
     );
   }
 }
